@@ -32,6 +32,13 @@
 #include <Adafruit_GFX.h>     // Core graphics library
 #include <Adafruit_ST7789.h>  // Hardware-specific library for ST7789
 #include <SPI.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Arduino_JSON.h>
+#include <utility>
+
+#include "WifiCredentials.h"
+#include "Env.h"
 
 #define TFT_CS 10
 #define TFT_RST 4  // Or set to -1 and connect to Arduino RESET pin
@@ -73,20 +80,36 @@ void setup(void) {
 
   tft.setRotation(3);
 
-  tft.fillScreen(COLOR_SKY);
+  initWiFi();
 
-  updateUI("sun");
+  updateUI();
 }
 
 void loop() {
 }
 
-void updateUI(String type) {
+void updateUI() {
+  int temp;
+  int humidity;
+  int precipitation;
+  std::string weatherText;
+  getCurrentWeather(weatherText, temp, humidity, precipitation);
+
+  tft.fillScreen(COLOR_SKY);
+
+  if (weatherText == "Mostly cloudy" || weatherText == "Cloudy") {
+    weatherText = "cloud";
+  } else if (weatherText == "Sunny") {
+    weatherText = "sun";
+  } else {
+    weatherText = "";
+  }
+
   tft.fillScreen(COLOR_BG);
   // TODO: Fetch weather data
 
   // TODO: Draw main component
-  drawMainComponent(type);
+  drawMainComponent(String(weatherText.c_str()), temp);
 
   // TODO: draw right component
   drawWeeklyWeather();
@@ -94,12 +117,12 @@ void updateUI(String type) {
   //tft.drawFastVLine(SCREEN_WIDTH / 6 * 5, 0, SCREEN_HEIGHT / 5 * 3, ST77XX_RED);  // HELPER
 
   // TODO: draw bottom component
-  drawWeatherDetails();
+  drawWeatherDetails(humidity, precipitation);
 
   //tft.drawFastHLine(0, SCREEN_HEIGHT / 5 * 3, SCREEN_WIDTH, ST77XX_RED);  // HELPER
 }
 
-void drawMainComponent(String type) {
+void drawMainComponent(String type, int temp) {
   int x = 0;
   int y = 0;
 
@@ -124,7 +147,7 @@ void drawMainComponent(String type) {
 
   drawBox(componentWidth / 2, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
 
-  drawWeatherTemp(13, iconComponentWidth, iconComponentHeight);
+  drawWeatherTemp(temp, iconComponentWidth, iconComponentHeight);
 
   drawLowHighTemps(12, 26, componentWidth, componentHeight);
 }
@@ -298,9 +321,62 @@ void drawIcon(String type, int centerX, int centerY, int size) {
       tft.fillCircle(centerX + i, centerY + size / 2 * 1.3 + i, 2, COLOR_RAIN);
       tft.fillCircle(centerX + size / 3 + i, centerY + size / 2 * 1.3 + i, 2, COLOR_RAIN);
     }
-  } else {
-    // cloud + sun
+  } else {  // Partly sunny
+    // START SUN
+    int sunX = centerX + size / 16 * 6;
+    int sunY = centerY - size / 16 * 2;
+    int sunSize = size * .45;
+    tft.fillCircle(sunX, sunY, sunSize, ST77XX_YELLOW);
+
+    int raySize = 1;
+    // top
+    for (int i = 0; i <= 5; i++) {
+      tft.fillCircle(sunX, sunY - sunSize - i, raySize, ST77XX_YELLOW);
+    }
+
+    // right
+    for (int i = 0; i <= 5; i++) {
+      tft.fillCircle(sunX + sunSize + i, sunY, raySize, ST77XX_YELLOW);
+    }
+
+    // top right
+    int degrees = -45;
+    double angle_radians = degrees * M_PI / 180;
+    int x2 = sunX + (sunSize + raySize) * cos(angle_radians);
+    int y2 = sunY + (sunSize + raySize) * sin(angle_radians);
+    tft.fillCircle(x2, y2, raySize, ST77XX_YELLOW);
+    tft.fillCircle(x2 + 2, y2 - 2, raySize, ST77XX_YELLOW);
+
+    // bottom right
+    degrees = 45;
+    angle_radians = degrees * M_PI / 180;
+    x2 = sunX + (sunSize + raySize) * cos(angle_radians);
+    y2 = sunY + (sunSize + raySize) * sin(angle_radians);
+    tft.fillCircle(x2, y2, raySize, ST77XX_YELLOW);
+    tft.fillCircle(x2 + 2, y2 + 2, raySize, ST77XX_YELLOW);
+
+    // top left
+    degrees = -135;
+    angle_radians = degrees * M_PI / 180;
+    x2 = sunX + (sunSize + raySize) * cos(angle_radians);
+    y2 = sunY + (sunSize + raySize) * sin(angle_radians);
+    tft.fillCircle(x2, y2, raySize, ST77XX_YELLOW);
+    tft.fillCircle(x2 - 2, y2 - 2, raySize, ST77XX_YELLOW);
   }
+
+  // START CLOUD
+  size *= 1.2;
+  tft.fillRoundRect(centerX - size / 16 * 11, centerY + size / 8, size + size / 8, size / 2, size / 4, COLOR_CLOUD);
+
+  // left
+  tft.fillCircle(centerX - size / 2, centerY + size / 4, size / 4, COLOR_CLOUD);
+
+  // top
+  tft.fillCircle(centerX - size / 4, centerY + size / 16, size / 3, COLOR_CLOUD);
+
+  // right
+  tft.fillCircle(centerX + size / 4, centerY + size / 6, size / 5 * 2, COLOR_CLOUD);
+  // END CLOUD
 }
 
 void drawBox(int16_t startX, int16_t startY, int16_t paddingX, int16_t paddingY, int16_t width, int16_t height, int16_t radius, uint16_t color) {
@@ -327,7 +403,7 @@ void drawWeeklyWeather() {
   }
 }
 
-void drawWeatherDetails() {
+void drawWeatherDetails(int humidity, int precipitation) {
   int componentWidth = SCREEN_WIDTH / 6;
   int componentHeight = SCREEN_HEIGHT / 5 * 3;
 
@@ -354,7 +430,7 @@ void drawWeatherDetails() {
   tft.print("Hum.");
   tft.setCursor(x, y + 12);
   tft.setTextSize(2);
-  tft.print("83%");
+  tft.printf("%d%%", humidity);
 
   tft.drawFastHLine(x + 3, componentHeight / 2, componentWidth * 0.5, ST77XX_BLACK);
 
@@ -367,7 +443,11 @@ void drawWeatherDetails() {
   tft.print("Prec.");
   tft.setCursor(x, y + 12);
   tft.setTextSize(2);
-  tft.print("35%");
+  tft.print(precipitation);
+  int len = std::to_string(precipitation).length();
+  tft.setCursor(x + len * 13, y + 20);
+  tft.setTextSize(1.5);
+  tft.print("mm");
 }
 
 void drawSingleDetail(int x, int y, String label, String value) {
@@ -391,4 +471,111 @@ void colorgradient(int x, int y, int w, int h) {
     int ratio = row / w;
     tft.drawFastVLine(x + row, y + 1, h, tft.color565(27 * ratio, 20, b - 27 * ratio));
   }
+}
+
+void initWiFi() {
+  tft.fillScreen(ST77XX_WHITE);
+  tft.setCursor(5, 5);
+  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextWrap(false);
+  tft.setTextSize(1.5);
+  tft.print("Connecting to Wifi...");
+
+  WiFi.begin(SSID, PASSWORD);
+  Serial.print("Connecting to WiFi ..");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(1000);
+  }
+
+  tft.fillScreen(ST77XX_GREEN);
+  tft.setCursor(5, 5);
+  tft.print("Wifi Connected!");
+  tft.setCursor(5, 15);
+  tft.print(WiFi.localIP());
+
+  Serial.println(WiFi.localIP());
+  delay(500);
+}
+
+void getCurrentWeather(std::string& weatherText, int& temp, int& humidity, int& precipitation) {
+  // if not succesfull, values with be visibly wrong
+  weatherText = "sun";
+  temp = 0;
+  humidity = -1;
+  precipitation = -1;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    String response;
+    String todos[3];
+    response = httpGETRequest("http://dataservice.accuweather.com/currentconditions/v1/328328?apikey=" + ACCUWEATHER_API_KEY + "&details=true");
+    // Serial.println(response);
+    JSONVar myObject = JSON.parse(response);
+
+    // JSON.typeof(jsonVar) can be used to get the type of the var
+    if (JSON.typeof(myObject) == "undefined") {
+      Serial.println("Parsing input failed!");
+      return;
+    }
+
+    // Serial.print("JSON object = ");
+    // Serial.println(myObject);
+
+    boolean hasPrecipitation = boolean(myObject[0]["hasPrecipitation"]);
+    if (hasPrecipitation) {
+      weatherText = "rain";
+    } else {
+      weatherText = std::string(myObject[0]["WeatherText"]);
+    }
+    temp = int(myObject[0]["Temperature"]["Metric"]["Value"]);
+    humidity = int(myObject[0]["RelativeHumidity"]);
+    precipitation = int(myObject[0]["PrecipitationSummary"]["Precipitation"]["Metric"]["Value"]);
+
+    Serial.println(String(weatherText.c_str()));
+    // Serial.println(temp);
+    Serial.println("Curr weather updated.");
+
+    // myObject.keys() can be used to get an array of all the keys in the object
+    // JSONVar keys = myObject[0].keys();
+
+    // for (int i = 0; i < keys.length(); i++) {
+    //   JSONVar value = myObject[0][keys[i]];
+    //   Serial.print(keys[i]);
+    //   Serial.print(" = ");
+    //   Serial.println(value);
+    // }
+  } else {
+    Serial.println("WiFi Disconnected");
+    weatherText = "sun";
+    temp = 0;
+  }
+}
+
+String httpGETRequest(const char* serverName) {
+  WiFiClient client;
+  HTTPClient http;
+
+  // Your Domain name with URL path or IP address with path
+  http.begin(serverName);
+
+  // If you need Node-RED/server authentication, insert user and password below
+  //http.setAuthorization("REPLACE_WITH_SERVER_USERNAME", "REPLACE_WITH_SERVER_PASSWORD");
+
+  // Send HTTP POST request
+  int httpResponseCode = http.GET();
+
+  String payload = "{}";
+
+  if (httpResponseCode > 0) {
+    // Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    payload = http.getString();
+  } else {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
+  return payload;
 }
