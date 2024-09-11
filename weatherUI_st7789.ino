@@ -49,6 +49,10 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #define COLOR_SKY 0x96ff
 #define COLOR_CLOUD 0xa514
 #define COLOR_RAIN 0x30fd
+#define COLOR_BG 0xef5d
+#define COLOR_SHADOW 0xc618
+#define COLOR_TAG_HOT 0xd1e0
+#define COLOR_TAG_COLD 0x029b
 
 // SCREEN
 #define SCREEN_WIDTH 320
@@ -78,17 +82,21 @@ void loop() {
 }
 
 void updateUI(String type) {
-  tft.fillScreen(COLOR_SKY);
+  tft.fillScreen(COLOR_BG);
   // TODO: Fetch weather data
 
   // TODO: Draw main component
   drawMainComponent(type);
 
   // TODO: draw right component
-  tft.drawFastVLine(SCREEN_WIDTH / 6 * 5, 0, SCREEN_HEIGHT / 5 * 3, ST77XX_BLACK);
+  drawWeeklyWeather();
+
+  //tft.drawFastVLine(SCREEN_WIDTH / 6 * 5, 0, SCREEN_HEIGHT / 5 * 3, ST77XX_RED);  // HELPER
 
   // TODO: draw bottom component
-  tft.drawFastHLine(0, SCREEN_HEIGHT / 5 * 3, SCREEN_WIDTH, ST77XX_BLACK);
+  drawWeatherDetails();
+
+  //tft.drawFastHLine(0, SCREEN_HEIGHT / 5 * 3, SCREEN_WIDTH, ST77XX_RED);  // HELPER
 }
 
 void drawMainComponent(String type) {
@@ -104,13 +112,17 @@ void drawMainComponent(String type) {
   int iconComponentWidth = componentWidth / 2;
   int iconComponentHeight = componentHeight / 5 * 4;
 
-  //tft.drawFastHLine(0, iconComponentHeight, iconComponentWidth, ST77XX_RED);  // HELPER
+  //tft.drawFastHLine(0, iconComponentHeight, componentWidth, ST77XX_RED);  // HELPER
+
+  drawBox(0, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
 
   drawWeatherIcon(componentWidth, componentHeight, type);
 
   drawWeatherLocationText(componentWidth, componentHeight, iconComponentHeight);
 
   //tft.drawFastHLine(iconComponentWidth, iconComponentHeight, iconComponentWidth, ST77XX_RED);  // HELPER
+
+  drawBox(componentWidth / 2, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
 
   drawWeatherTemp(13, iconComponentWidth, iconComponentHeight);
 
@@ -171,19 +183,27 @@ void drawLowHighTemps(int lowTemp, int highTemp, int parentWidth, int parentHeig
   int iconComponentWidth = parentWidth / 2;
   int iconComponentHeight = parentHeight / 5 * 4;
 
-  int paddingX = iconComponentWidth * .1;
-  int paddingY = iconComponentHeight * .1;
+  int paddingX = iconComponentWidth * .2;
+  int paddingY = iconComponentHeight * .2;
 
   int textWidth = 24;
+  int textHeight = 10;
 
   int lowStartX = iconComponentWidth + paddingX;
   int highStartX = parentWidth - paddingX - textWidth;
 
   int highLowHeight = parentHeight / 5;
-  int startY = iconComponentHeight + highLowHeight / 2 - 3;
+  int startY = iconComponentHeight;  //+ highLowHeight / 2 - 3;
+
+  int tagPaddingX = 12;
+  int tagPaddingY = 6;
+
+  tft.fillRoundRect(lowStartX - tagPaddingX / 2, startY - tagPaddingY / 2, textWidth + tagPaddingX / 2, textHeight + tagPaddingY / 2, 3, COLOR_TAG_COLD);
+  tft.fillRoundRect(highStartX - tagPaddingX / 2, startY - tagPaddingY / 2, textWidth + tagPaddingX / 2, textHeight + tagPaddingY / 2, 3, COLOR_TAG_HOT);
+  // colorgradient(lowStartX - 10, startY, parentWidth - 10 - lowStartX, textHeight);
 
   tft.setCursor(lowStartX, startY);
-  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextColor(ST77XX_WHITE);
   tft.setTextWrap(false);
   tft.setTextSize(1.5);
   tft.printf("L:%d", lowTemp);
@@ -280,5 +300,95 @@ void drawIcon(String type, int centerX, int centerY, int size) {
     }
   } else {
     // cloud + sun
+  }
+}
+
+void drawBox(int16_t startX, int16_t startY, int16_t paddingX, int16_t paddingY, int16_t width, int16_t height, int16_t radius, uint16_t color) {
+  tft.fillRoundRect(startX + 1 * paddingX / 2, startY + 2 * paddingY / 2, width - paddingX, height - paddingY, radius, COLOR_SHADOW);
+  tft.fillRoundRect(startX + paddingX / 2, startY + paddingY / 2, width - paddingX, height - paddingY, radius, color);
+}
+
+void drawWeeklyWeather() {
+  int componentWidth = SCREEN_WIDTH;
+  int componentHeight = SCREEN_HEIGHT / 5 * 2;
+
+  int startX = 0;
+  int startY = SCREEN_HEIGHT / 5 * 3;
+
+  //String[] days = ["Mon", "Tue","Wed","Thu","Fri","Sat"];
+
+  int width = componentWidth / 6;
+
+  for (int i = 0; i < 6; i++) {
+    int paddingX = 6;
+    int paddingY = 4;
+
+    drawBox(startX + width * i, startY, paddingX, paddingY, width, componentHeight, 10, COLOR_SKY);
+  }
+}
+
+void drawWeatherDetails() {
+  int componentWidth = SCREEN_WIDTH / 6;
+  int componentHeight = SCREEN_HEIGHT / 5 * 3;
+
+  int startX = SCREEN_WIDTH / 6 * 5;
+  int startY = 0;
+
+  int paddingX = 6;
+  int paddingY = 4;
+
+  drawBox(startX, startY, paddingX, paddingY, componentWidth, componentHeight, 10, COLOR_SKY);
+
+  int x = startX + 10;
+
+  // drawSingleDetail(textStartX, startY + 6, "Hum.", "85%");
+  // drawSingleDetail(textStartX, startY + 56, "Prec.", "35%");
+  // drawSingleDetail(textStartX, startY + 112, "Wind", "13km/h");
+
+  // Humidity
+  int y = startY + 16;
+  tft.setCursor(x, y);
+  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextWrap(false);
+  tft.setTextSize(1.5);
+  tft.print("Hum.");
+  tft.setCursor(x, y + 12);
+  tft.setTextSize(2);
+  tft.print("83%");
+
+  tft.drawFastHLine(x + 3, componentHeight / 2, componentWidth * 0.5, ST77XX_BLACK);
+
+  // Precipitation
+  y = startY + 60;
+  tft.setCursor(x, y);
+  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextWrap(false);
+  tft.setTextSize(1.5);
+  tft.print("Prec.");
+  tft.setCursor(x, y + 12);
+  tft.setTextSize(2);
+  tft.print("35%");
+}
+
+void drawSingleDetail(int x, int y, String label, String value) {
+  tft.setCursor(x, y);
+  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextWrap(false);
+  tft.setTextSize(1.5);
+  tft.print(label);
+  tft.setCursor(x, y + 16);
+  tft.setTextSize(2);
+  tft.print(value);
+}
+// UTILS
+void colorgradient(int x, int y, int w, int h) {
+  uint8_t r, g, b;
+  r = 0;   // +27
+  g = 20;  // +2
+  b = 27;  // -27
+
+  for (int row = 0; row < w - 1; row++) {
+    int ratio = row / w;
+    tft.drawFastVLine(x + row, y + 1, h, tft.color565(27 * ratio, 20, b - 27 * ratio));
   }
 }
