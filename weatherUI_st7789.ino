@@ -97,14 +97,6 @@ void updateUI() {
 
   tft.fillScreen(COLOR_SKY);
 
-  if (weatherText == "Mostly cloudy" || weatherText == "Cloudy") {
-    weatherText = "cloud";
-  } else if (weatherText == "Sunny") {
-    weatherText = "sun";
-  } else {
-    weatherText = "";
-  }
-
   tft.fillScreen(COLOR_BG);
   // TODO: Fetch weather data
 
@@ -321,6 +313,11 @@ void drawIcon(String type, int centerX, int centerY, int size) {
       tft.fillCircle(centerX + i, centerY + size / 2 * 1.3 + i, 2, COLOR_RAIN);
       tft.fillCircle(centerX + size / 3 + i, centerY + size / 2 * 1.3 + i, 2, COLOR_RAIN);
     }
+  } else if (type == "moon") {
+    int sunX = centerX + size / 16 * 6;
+    int sunY = centerY - size / 16 * 2;
+    int sunSize = size * .45;
+    tft.fillCircle(sunX, sunY, sunSize, COLOR_CLOUD);
   } else {  // Partly sunny
     // START SUN
     int sunX = centerX + size / 16 * 6;
@@ -362,21 +359,21 @@ void drawIcon(String type, int centerX, int centerY, int size) {
     y2 = sunY + (sunSize + raySize) * sin(angle_radians);
     tft.fillCircle(x2, y2, raySize, ST77XX_YELLOW);
     tft.fillCircle(x2 - 2, y2 - 2, raySize, ST77XX_YELLOW);
+
+    // START CLOUD
+    size *= 1.2;
+    tft.fillRoundRect(centerX - size / 16 * 11, centerY + size / 8, size + size / 8, size / 2, size / 4, COLOR_CLOUD);
+
+    // left
+    tft.fillCircle(centerX - size / 2, centerY + size / 4, size / 4, COLOR_CLOUD);
+
+    // top
+    tft.fillCircle(centerX - size / 4, centerY + size / 16, size / 3, COLOR_CLOUD);
+
+    // right
+    tft.fillCircle(centerX + size / 4, centerY + size / 6, size / 5 * 2, COLOR_CLOUD);
+    // END CLOUD
   }
-
-  // START CLOUD
-  size *= 1.2;
-  tft.fillRoundRect(centerX - size / 16 * 11, centerY + size / 8, size + size / 8, size / 2, size / 4, COLOR_CLOUD);
-
-  // left
-  tft.fillCircle(centerX - size / 2, centerY + size / 4, size / 4, COLOR_CLOUD);
-
-  // top
-  tft.fillCircle(centerX - size / 4, centerY + size / 16, size / 3, COLOR_CLOUD);
-
-  // right
-  tft.fillCircle(centerX + size / 4, centerY + size / 6, size / 5 * 2, COLOR_CLOUD);
-  // END CLOUD
 }
 
 void drawBox(int16_t startX, int16_t startY, int16_t paddingX, int16_t paddingY, int16_t width, int16_t height, int16_t radius, uint16_t color) {
@@ -483,9 +480,13 @@ void initWiFi() {
 
   WiFi.begin(SSID, PASSWORD);
   Serial.print("Connecting to WiFi ..");
+  int tries = 0;
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print('.');
     delay(1000);
+
+    if (tries > 3) break;
+    tries++;
   }
 
   tft.fillScreen(ST77XX_GREEN);
@@ -507,9 +508,8 @@ void getCurrentWeather(std::string& weatherText, int& temp, int& humidity, int& 
 
   if (WiFi.status() == WL_CONNECTED) {
     String response;
-    String todos[3];
-    response = httpGETRequest("http://dataservice.accuweather.com/currentconditions/v1/328328?apikey=" + ACCUWEATHER_API_KEY + "&details=true");
-    // Serial.println(response);
+    response = httpGETRequest("https://weatherapi-com.p.rapidapi.com/current.json?q=London+UK");
+    Serial.println(response);
     JSONVar myObject = JSON.parse(response);
 
     // JSON.typeof(jsonVar) can be used to get the type of the var
@@ -521,15 +521,25 @@ void getCurrentWeather(std::string& weatherText, int& temp, int& humidity, int& 
     // Serial.print("JSON object = ");
     // Serial.println(myObject);
 
-    boolean hasPrecipitation = boolean(myObject[0]["hasPrecipitation"]);
-    if (hasPrecipitation) {
+    temp = int(myObject["current"]["temp_c"]);
+    humidity = int(myObject["current"]["humidity"]);
+    precipitation = int(myObject["current"]["precip_mm"]);
+    int cloud = int(myObject["current"]["cloud"]);
+    int isDay = int(myObject["current"]["is_day"]);
+
+    Serial.println(humidity);
+    Serial.println(precipitation);
+    Serial.println(cloud);
+
+    if (isDay == 0) {
+      weatherText = "moon";
+    } else if (precipitation >= 5) {
       weatherText = "rain";
-    } else {
-      weatherText = std::string(myObject[0]["WeatherText"]);
+    } else if (cloud > 50) {
+      weatherText = "cloud";
+    } else if (cloud > 20) {
+      weatherText = "";  // partly cloudy
     }
-    temp = int(myObject[0]["Temperature"]["Metric"]["Value"]);
-    humidity = int(myObject[0]["RelativeHumidity"]);
-    precipitation = int(myObject[0]["PrecipitationSummary"]["Precipitation"]["Metric"]["Value"]);
 
     Serial.println(String(weatherText.c_str()));
     // Serial.println(temp);
@@ -546,17 +556,16 @@ void getCurrentWeather(std::string& weatherText, int& temp, int& humidity, int& 
     // }
   } else {
     Serial.println("WiFi Disconnected");
-    weatherText = "sun";
-    temp = 0;
   }
 }
 
 String httpGETRequest(const char* serverName) {
-  WiFiClient client;
   HTTPClient http;
 
   // Your Domain name with URL path or IP address with path
   http.begin(serverName);
+
+  http.addHeader("x-rapidapi-key", RAPID_API_KEY);
 
   // If you need Node-RED/server authentication, insert user and password below
   //http.setAuthorization("REPLACE_WITH_SERVER_USERNAME", "REPLACE_WITH_SERVER_PASSWORD");
