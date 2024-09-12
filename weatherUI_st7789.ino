@@ -1,34 +1,3 @@
-/**************************************************************************
-  This is a library for several Adafruit displays based on ST77* drivers.
-
-  This example works with the 1.14" TFT breakout
-    ----> https://www.adafruit.com/product/4383
-  The 1.3" TFT breakout
-    ----> https://www.adafruit.com/product/4313
-  The 1.47" TFT breakout
-    ----> https://www.adafruit.com/product/5393
-  The 1.54" TFT breakout
-    ----> https://www.adafruit.com/product/3787
-  The 1.69" TFT breakout
-    ----> https://www.adafruit.com/product/5206
-  The 1.9" TFT breakout
-    ----> https://www.adafruit.com/product/5394
-  The 2.0" TFT breakout
-    ----> https://www.adafruit.com/product/4311
-
-
-  Check out the links above for our tutorials and wiring diagrams.
-  These displays use SPI to communicate, 4 or 5 pins are required to
-  interface (RST is optional).
-
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.
-  MIT license, all text above must be included in any redistribution
- **************************************************************************/
-
 #include <Adafruit_GFX.h>     // Core graphics library
 #include <Adafruit_ST7789.h>  // Hardware-specific library for ST7789
 #include <SPI.h>
@@ -57,13 +26,20 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
 #define COLOR_CLOUD 0xa514
 #define COLOR_RAIN 0x30fd
 #define COLOR_BG 0xef5d
+#define COLOR_BG_NIGHT 0x286d
 #define COLOR_SHADOW 0xc618
 #define COLOR_TAG_HOT 0xd1e0
 #define COLOR_TAG_COLD 0x029b
+#define COLOR_DETAILS_BG 0xa69c
+#define COLOR_MOON 0xde95
 
 // SCREEN
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 170
+
+uint16_t TEXT_COLOR = ST77XX_BLACK;
+uint16_t BG_COLOR = COLOR_SKY;
+uint16_t DETAILS_BG = COLOR_DETAILS_BG;
 
 void setup(void) {
   Serial.begin(9600);
@@ -86,6 +62,22 @@ void setup(void) {
 }
 
 void loop() {
+  // TODO: fix the way this works. it'll do for now
+  // Update every hour
+  delay(3600000);
+  updateUI();
+}
+
+void changeTheme(std::string theme) {
+  if (theme == "moon") {
+    BG_COLOR = COLOR_BG_NIGHT;
+    TEXT_COLOR = ST77XX_WHITE;
+    DETAILS_BG = 0x7310;
+  } else {
+    TEXT_COLOR = ST77XX_BLACK;
+    BG_COLOR = COLOR_SKY;
+    DETAILS_BG = COLOR_DETAILS_BG;
+  }
 }
 
 void updateUI() {
@@ -95,10 +87,8 @@ void updateUI() {
   std::string weatherText;
   getCurrentWeather(weatherText, temp, humidity, precipitation);
 
-  tft.fillScreen(COLOR_SKY);
-
-  tft.fillScreen(COLOR_BG);
-  // TODO: Fetch weather data
+  changeTheme(weatherText);
+  tft.fillScreen(BG_COLOR);
 
   // TODO: Draw main component
   drawMainComponent(String(weatherText.c_str()), temp);
@@ -106,20 +96,21 @@ void updateUI() {
   // TODO: draw right component
   drawWeeklyWeather();
 
-  //tft.drawFastVLine(SCREEN_WIDTH / 6 * 5, 0, SCREEN_HEIGHT / 5 * 3, ST77XX_RED);  // HELPER
 
   // TODO: draw bottom component
   drawWeatherDetails(humidity, precipitation);
 
-  //tft.drawFastHLine(0, SCREEN_HEIGHT / 5 * 3, SCREEN_WIDTH, ST77XX_RED);  // HELPER
+  // tft.drawFastVLine(SCREEN_WIDTH / 2, 0, SCREEN_HEIGHT / 4 * 3, ST77XX_RED);  // HELPER
+  // tft.drawFastHLine(0, SCREEN_HEIGHT / 4 * 3, SCREEN_WIDTH, ST77XX_RED);  // HELPER
+  // tft.drawFastHLine(0, SCREEN_HEIGHT / 4 * 3 / 2, SCREEN_WIDTH, ST77XX_RED);  // HELPER
 }
 
 void drawMainComponent(String type, int temp) {
   int x = 0;
   int y = 0;
 
-  int componentWidth = SCREEN_WIDTH / 6 * 5;
-  int componentHeight = SCREEN_HEIGHT / 5 * 3;
+  int componentWidth = SCREEN_WIDTH;
+  int componentHeight = SCREEN_HEIGHT / 4 * 3;
 
   //tft.drawFastVLine(componentWidth / 2, 0, componentHeight, ST77XX_RED);  // HELPER
 
@@ -129,7 +120,7 @@ void drawMainComponent(String type, int temp) {
 
   //tft.drawFastHLine(0, iconComponentHeight, componentWidth, ST77XX_RED);  // HELPER
 
-  drawBox(0, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
+  // drawBox(0, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
 
   drawWeatherIcon(componentWidth, componentHeight, type);
 
@@ -137,16 +128,16 @@ void drawMainComponent(String type, int temp) {
 
   //tft.drawFastHLine(iconComponentWidth, iconComponentHeight, iconComponentWidth, ST77XX_RED);  // HELPER
 
-  drawBox(componentWidth / 2, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
+  // drawBox(componentWidth / 2, 0, 8, 4, componentWidth / 2, componentHeight, 10, COLOR_SKY);
 
   drawWeatherTemp(temp, iconComponentWidth, iconComponentHeight);
 
-  drawLowHighTemps(12, 26, componentWidth, componentHeight);
+  // drawLowHighTemps(12, 26, componentWidth, componentHeight);
 }
 
 void drawWeatherIcon(int parentWidth, int parentHeight, String type) {
   int iconComponentWidth = parentWidth / 2;
-  int iconComponentHeight = parentHeight / 5 * 4;
+  int iconComponentHeight = parentHeight;
 
   //tft.drawFastHLine(0, iconComponentHeight, iconComponentWidth, ST77XX_RED);  // HELPER
 
@@ -168,30 +159,32 @@ void drawWeatherLocationText(int parentWidth, int parentHeight, int iconComponen
   int locationTextComponentWidth = 60;
   int locationTextComponentHeight = 6;
 
-  int locationStartX = locComponentWidth / 2 - locationTextComponentWidth / 2;
+  int locationStartX = locComponentWidth - locationTextComponentWidth / 2;
   int locationStartY = iconComponentHeight + locComponentHeight / 2 - locationTextComponentHeight / 2;
 
   tft.setCursor(locationStartX, locationStartY);
-  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextColor(TEXT_COLOR);
   tft.setTextWrap(false);
   tft.setTextSize(1.5);
   tft.print("London, UK");
 }
 
 void drawWeatherTemp(int temp, int parentWidth, int parentHeight) {
-  int tempTextWidth = 70;
-  int tempTextHeight = 55;
+  int tempChars = std::to_string(temp).length();
+  int tempTextWidth = 40 * tempChars;
+  int tempTextHeight = 60;
 
   int tempStartX = parentWidth + parentWidth / 2 - tempTextWidth / 2 - 5;
-  int tempStartY = parentHeight / 2 - tempTextHeight / 2;
+  int tempStartY = parentHeight / 2 - tempTextHeight / 2 + tempTextHeight / 4;
+
   tft.setCursor(tempStartX, tempStartY);
-  tft.setTextColor(ST77XX_BLACK);
   tft.setTextWrap(false);
-  tft.setTextSize(7);
+  tft.setTextSize(8);
+  tft.setTextColor(TEXT_COLOR);
   tft.print(temp);
 
-  tft.fillCircle(tempStartX + tempTextWidth + 14, tempStartY + 2, 4, ST77XX_BLACK);
-  tft.fillCircle(tempStartX + tempTextWidth + 14, tempStartY + 2, 2, COLOR_SKY);
+  tft.fillCircle(tempStartX + tempTextWidth + 14, tempStartY + 2, 4, TEXT_COLOR);
+  tft.fillCircle(tempStartX + tempTextWidth + 14, tempStartY + 2, 2, BG_COLOR);
 }
 
 void drawLowHighTemps(int lowTemp, int highTemp, int parentWidth, int parentHeight) {
@@ -283,7 +276,8 @@ void drawIcon(String type, int centerX, int centerY, int size) {
     tft.fillCircle(x2, y2, 3, ST77XX_YELLOW);
     tft.fillCircle(x2 - 2, y2 - 2, 3, ST77XX_YELLOW);
   } else if (type == "cloud") {
-    size *= 1.4;
+    size *= 1.2;
+    centerY -= 10;
     tft.fillRoundRect(centerX - size / 16 * 11, centerY + size / 8, size + size / 8, size / 2, size / 4, COLOR_CLOUD);
 
     // left
@@ -296,6 +290,7 @@ void drawIcon(String type, int centerX, int centerY, int size) {
     tft.fillCircle(centerX + size / 4, centerY + size / 6, size / 5 * 2, COLOR_CLOUD);
   } else if (type == "rain") {
     size *= 1.2;
+    centerY -= 15;
     tft.fillRoundRect(centerX - size / 16 * 11, centerY + size / 16, size + size / 8, size / 2, size / 4, COLOR_CLOUD);
 
     // left
@@ -314,11 +309,10 @@ void drawIcon(String type, int centerX, int centerY, int size) {
       tft.fillCircle(centerX + size / 3 + i, centerY + size / 2 * 1.3 + i, 2, COLOR_RAIN);
     }
   } else if (type == "moon") {
-    int sunX = centerX + size / 16 * 6;
-    int sunY = centerY - size / 16 * 2;
-    int sunSize = size * .45;
-    tft.fillCircle(sunX, sunY, sunSize, COLOR_CLOUD);
+    tft.fillCircle(centerX, centerY, size / 2, COLOR_MOON);
+    tft.fillCircle(centerX + 10, centerY - 10, size / 2, BG_COLOR);
   } else {  // Partly sunny
+    centerY -= 10;
     // START SUN
     int sunX = centerX + size / 16 * 6;
     int sunY = centerY - size / 16 * 2;
@@ -396,48 +390,51 @@ void drawWeeklyWeather() {
     int paddingX = 6;
     int paddingY = 4;
 
-    drawBox(startX + width * i, startY, paddingX, paddingY, width, componentHeight, 10, COLOR_SKY);
+    // drawBox(startX + width * i, startY, paddingX, paddingY, width, componentHeight, 10, COLOR_SKY);
   }
 }
 
 void drawWeatherDetails(int humidity, int precipitation) {
-  int componentWidth = SCREEN_WIDTH / 6;
-  int componentHeight = SCREEN_HEIGHT / 5 * 3;
+  int componentWidth = SCREEN_WIDTH;
+  int componentHeight = SCREEN_HEIGHT / 4;
 
-  int startX = SCREEN_WIDTH / 6 * 5;
-  int startY = 0;
+  int startX = 0;
+  int startY = SCREEN_HEIGHT / 4 * 3;
 
-  int paddingX = 6;
+  int paddingX = 12;
   int paddingY = 4;
 
-  drawBox(startX, startY, paddingX, paddingY, componentWidth, componentHeight, 10, COLOR_SKY);
+  // drawBox(startX, startY, paddingX, paddingY, componentWidth, componentHeight, 10, COLOR_SKY);
 
-  int x = startX + 10;
+  int x = startX + paddingX / 2;
+  int y = startY + paddingY / 2 + 6;
 
   // drawSingleDetail(textStartX, startY + 6, "Hum.", "85%");
   // drawSingleDetail(textStartX, startY + 56, "Prec.", "35%");
   // drawSingleDetail(textStartX, startY + 112, "Wind", "13km/h");
 
+  tft.fillRect(0, SCREEN_HEIGHT / 4 * 3, SCREEN_WIDTH, SCREEN_HEIGHT / 4 + 20, DETAILS_BG);
+  tft.drawFastHLine(0, SCREEN_HEIGHT / 4 * 3, SCREEN_WIDTH, COLOR_CLOUD);
+
   // Humidity
-  int y = startY + 16;
-  tft.setCursor(x, y);
-  tft.setTextColor(ST77XX_BLACK);
   tft.setTextWrap(false);
   tft.setTextSize(1.5);
-  tft.print("Hum.");
+  tft.setCursor(x, y);
+  tft.setTextColor(TEXT_COLOR);
+  tft.print("Humidity");
   tft.setCursor(x, y + 12);
   tft.setTextSize(2);
   tft.printf("%d%%", humidity);
 
-  tft.drawFastHLine(x + 3, componentHeight / 2, componentWidth * 0.5, ST77XX_BLACK);
+  // tft.drawFastVLine(55, startY + componentHeight * 0.25, componentHeight * 0.5, ST77XX_BLACK);
 
   // Precipitation
-  y = startY + 60;
+  x = x + 70;
   tft.setCursor(x, y);
-  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextColor(TEXT_COLOR);
   tft.setTextWrap(false);
   tft.setTextSize(1.5);
-  tft.print("Prec.");
+  tft.print("Precipitation");
   tft.setCursor(x, y + 12);
   tft.setTextSize(2);
   tft.print(precipitation);
@@ -449,7 +446,7 @@ void drawWeatherDetails(int humidity, int precipitation) {
 
 void drawSingleDetail(int x, int y, String label, String value) {
   tft.setCursor(x, y);
-  tft.setTextColor(ST77XX_BLACK);
+  tft.setTextColor(TEXT_COLOR);
   tft.setTextWrap(false);
   tft.setTextSize(1.5);
   tft.print(label);
